@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.env
+env/
+venv/
+venv*/
+.venv/
+.Python
+
+# Streamlit / logs / outputs
+*.log
+*.sqlite
+*.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary / editor
+*.swp
+*.swo
+.vscode/
+.idea/
+*.iml
+
+# yt-dlp downloads (if you keep them inside repo by mistake)
+*.mp4
+*.mkv
+*.webm
+*.m4a
