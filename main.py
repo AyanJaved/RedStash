@@ -1,4 +1,4 @@
-# main.py — RedStash (no cookies, cookie-free 403 fallbacks)
+# main.py — RedStash (no cookies, cookie-free 403 fallbacks) — minimal changes
 import os
 import time
 import shutil
@@ -7,7 +7,7 @@ from yt_dlp import YoutubeDL
 
 # --- App setup ---
 st.set_page_config(page_title="RedStash", layout="centered")
-st.title("🎬 RedStash")
+st.title("RedStash")
 st.markdown("Download YouTube playlists or videos.")
 st.divider()
 
@@ -41,6 +41,7 @@ if "cancel" not in st.session_state:
 
 # --- Fast fetch titles (extract_flat) ---
 if st.button("Fetch"):
+    st.session_state["cancel"] = False
     if not playlist:
         st.warning("Please enter a URL.")
     else:
@@ -96,7 +97,6 @@ if info:
             "quiet": True,
             # prefer mp4 video + m4a audio, fallback to mp4 best
             "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "merge_output_format": "mp4" if ffmpeg_path else None,
             "retries": 3,
             # polite headers
             "http_headers": {
@@ -104,6 +104,8 @@ if info:
                 "Referer": "https://www.youtube.com/",
             },
         }
+        if ffmpeg_path:
+            base_opts["merge_output_format"] = "mp4"
 
         # alternate extractor client attempts (no cookies)
         FALLBACK_CLIENTS = [
@@ -136,42 +138,33 @@ if info:
             # try primary options first
             attempt_opts = dict(base_opts)
             attempt_opts["progress_hooks"] = [hook]
-            # first try (base)
             try:
                 with YoutubeDL(attempt_opts) as ydl:
                     ydl.download([url])
                 return True, None
             except Exception as e:
                 msg = str(e)
-                # if not 403-like, don't attempt further fallbacks (but we still try minimal retries)
                 is_403_like = ("HTTP Error 403" in msg) or ("403" in msg) or ("forbidden" in msg.lower())
-                # Try fallback clients if 403-like
                 if not is_403_like:
                     return False, msg
-                # otherwise attempt alternate extractor args with small backoff
                 for extra in FALLBACK_CLIENTS:
                     if st.session_state["cancel"]:
                         return False, "cancelled"
-                    # combine base_opts and extra
                     opts_try = dict(base_opts)
                     opts_try.update(extra)
                     opts_try["progress_hooks"] = [hook]
-                    # tweak headers slightly each attempt
                     ua = opts_try.get("http_headers", {}).get("User-Agent", "")
                     opts_try["http_headers"] = {
                         "User-Agent": ua + " (RedStash)",
                         "Referer": "https://www.youtube.com/",
                     }
                     try:
-                        time.sleep(1.0)  # backoff before retry
+                        time.sleep(1.0)
                         with YoutubeDL(opts_try) as ydl:
                             ydl.download([url])
                         return True, None
-                    except Exception as e2:
-                        msg = str(e2)
-                        # continue trying other fallback clients
+                    except Exception:
                         continue
-                # all fallbacks failed
                 return False, msg
 
         # download loop
@@ -181,7 +174,6 @@ if info:
                 log.empty()
                 break
 
-            # build final watch URL if needed
             url = e.get("webpage_url") or e.get("url")
             if url and not url.startswith("http"):
                 url = f"https://www.youtube.com/watch?v={url}"
@@ -201,7 +193,6 @@ if info:
                     if err == "cancelled":
                         log.warning("Stopped by user.")
                         break
-                    # Show helpful hint for 403 case
                     lowercase = (err or "").lower()
                     if "403" in lowercase or "forbidden" in lowercase:
                         log.error(f"Failed (403-like): {title} — {err}")
